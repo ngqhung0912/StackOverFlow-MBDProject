@@ -1,4 +1,4 @@
-from codes.features import word_count, sentence_count, char_count, coleman_liau, clean_data
+from codes.features import word_count, sentence_count, char_count, coleman_liau, clean_data, flesch_ease, flesch_grade
 
 import nltk
 nltk.download('punkt')
@@ -18,6 +18,8 @@ def test(text):
     print(char_count(text))
     print(sentence_count(text))
     print(coleman_liau(text))
+    print(flesch_ease(text))
+    print(flesch_grade(text))
     print(text)
 
 
@@ -30,7 +32,7 @@ linked servers are usually the source of poor performance, specially huge data ,
 <li>pull data from linked server into a table into R3 server ( directly) with server in middle.which depends on your scenario you can</li>\
 <li>change your query to be against that table</li>\
 </ul>\
-<p>this can significantly improve your query \time</p> <pre><code>template &lt;class T&gt;\
+<p>this can significantly improve your query time</p> <pre><code>template &lt;class T&gt;\
 void Lista&lt;T&gt;::imprimir()\
 {\
     NodoL *ptr = new NodoL;\
