@@ -24,7 +24,9 @@ def word_count(content):
 
     return text_length
 
-
+# SUbjectivity
+# Sentiment
+# Colemann
 
 sc = SparkContext(appName="stack_exchange")
 sc.setLogLevel("ERROR")
@@ -32,12 +34,13 @@ sqlContext = SQLContext(sc)
 spark = SparkSession.builder.getOrCreate()
 
 
-post_df = spark.read.parquet('posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet')
+post_df = spark.read.parquet('/user/s2812940/project/parquet_data/posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet')
 # Read a fraction of data (100 rows). Apply lambda function to count words.
 post_df_small = post_df.limit(1)
 
 word_count_udf = udf(lambda x: word_count(x))
 post_df_small = post_df_small.withColumn('bodyWordCount', word_count_udf(col('_Body')))
+print(post_df_small.show())
 
 
 
