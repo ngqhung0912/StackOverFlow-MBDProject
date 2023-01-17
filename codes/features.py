@@ -7,17 +7,9 @@ time spark-submit --master yarn --deploy-mode cluster  create_parquet.py
 
 """
 import re
-import nltk
-nltk.download('punkt')
-from nltk.tokenize import sent_tokenize
-from pyspark import SparkContext
-from pyspark.sql import SQLContext
-import sys
-from pyspark.sql.types import *
-from pyspark.sql import SparkSession
-import pyspark.sql.functions as f
-
 from pyspark.sql.functions import udf, col
+import nltk
+from nltk.tokenize import sent_tokenize
 
 
 
@@ -72,7 +64,4 @@ def coleman_liau(cleaned_text):
     return 0.0588 * L - 0.296 * S - 15.8
 
 
-
-word_count_udf = udf(lambda x: word_count(x))
-post_df_small = post_df_small.withColumn('bodyWordCount', word_count_udf(col('_Body')))
-print(post_df_small.show())
+#
