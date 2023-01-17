@@ -7,10 +7,8 @@ time spark-submit --master yarn --deploy-mode cluster  create_parquet.py
 
 """
 import re
-from pyspark.sql.functions import udf, col
 import nltk
 from nltk.tokenize import sent_tokenize
-
 
 
 def word_count(content):
@@ -42,10 +40,6 @@ def syllable_count(word):
     return count
 
 
-
-
-
-
 def char_count(content):
     return len(content)
 
@@ -59,9 +53,8 @@ def coleman_liau(cleaned_text):
     no_chars = char_count(cleaned_text)
     no_sentences = sentence_count(cleaned_text)
     no_words = word_count(cleaned_text)
-    L = no_chars / no_words
-    S = no_words / no_sentences
+    L = (no_chars / no_words) * 100
+    S = (no_sentences / no_words) * 100
     return 0.0588 * L - 0.296 * S - 15.8
-
 
 #
