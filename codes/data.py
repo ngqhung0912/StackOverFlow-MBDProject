@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
+from pyspark import SparkContext
+from pyspark.sql import SQLContext
+import sys
+from pyspark.sql.types import *
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, explode
+import pyspark.sql.functions as f
 import re
+
 # Factors influencing how fast your questions getting answer (AnswerCount, CommentCount, ClosedDate…)? Including (long) code in the question?
 # -Sentiment and scope of the title
 # -Tag selection (number of tags/questions, synonyms)

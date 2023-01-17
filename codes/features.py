@@ -17,26 +17,42 @@ from pyspark.sql.functions import udf, col
 
 
 def word_count(content):
-    rules = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
-    cleantext = re.sub(rules, '', content.lower())
-    cleantext = re.sub('[^a-z0-9]+', ' ', cleantext)
-    text_length = len(cleantext.split())
+    return len(content.split())
 
-    return text_length
+
+def clean_data(text):
+    rules = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
+    text = text.lower()
+    codeless_text = re.sub("<code>.*?</code>", "", text)  # remove code block
+    cleantext = re.sub(rules, '', codeless_text)
+    return cleantext
+
+
+def syllable_count(word):
+    count = 0
+    vowels = "aeiouy"
+    if word[0] in vowels:
+        count += 1
+    for index in range(1, len(word)):
+        if word[index] in vowels and word[index - 1] not in vowels:
+            count += 1
+    if word.endswith("e"):
+        count -= 1
+    if word.endswith('le'):
+        count += 1
+    if count == 0:
+        count += 1
+    return count
+
+
+
+
 
 # SUbjectivity
 # Sentiment
 # Colemann
 
-sc = SparkContext(appName="stack_exchange")
-sc.setLogLevel("ERROR")
-sqlContext = SQLContext(sc)
-spark = SparkSession.builder.getOrCreate()
 
-
-post_df = spark.read.parquet('/user/s2812940/project/parquet_data/posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet')
-# Read a fraction of data (100 rows). Apply lambda function to count words.
-post_df_small = post_df.limit(1)
 
 word_count_udf = udf(lambda x: word_count(x))
 post_df_small = post_df_small.withColumn('bodyWordCount', word_count_udf(col('_Body')))
