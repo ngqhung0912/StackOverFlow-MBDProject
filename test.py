@@ -8,14 +8,13 @@ from codes.features import word_count, sentence_count, char_count, coleman_liau,
 # nltk.download('punkt')
 from pyspark.sql import SparkSession
 
-
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
 import sys
-from pyspark.sql.types import *
-from pyspark.sql import SparkSession
+import pyspark.sql.functions as f
 
 from pyspark.sql.functions import udf, col
+
 '''
 PYSPARK_PYTHON=./../miniconda3/envs/bigdataEnv/bin/python spark-submit  --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./../miniconda3/envs/bigdataEnv/bin/python --archives /../miniconda3/envs/bigdataEnv.zip#bigdataEnv test.py
 

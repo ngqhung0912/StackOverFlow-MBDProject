@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
+# time spark-submit   --conf "spark.pyspark.python=../new_env/bin/python" --conf "spark.pyspark.driver.python=../new_env/bin/python" data.py
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
 import sys
+import math
 from pyspark.sql.types import *
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
-import re
+from features import Features
+from pyspark.sql.functions import udf, col
 
 # Factors influencing how fast your questions getting answer (AnswerCount, CommentCount, ClosedDate…)? Including (long) code in the question?
 # -Sentiment and scope of the title
@@ -28,7 +31,6 @@ ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
 questions = questions.drop(*ignore_cols_posts)
 # posts_df = posts_df.drop(*ignore_cols_posts)
 
-CLEANR = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 # accepted_answers = posts_df.join(questions.withColumnRenamed("_Id", "_PostId"), col("_Answer_Id") == col("_AcceptedAnswerId"))
 accepted_answers = posts_df.filter(questions._AcceptedAnswerId == posts_df._Id)
 #max min score
@@ -47,3 +49,38 @@ RESULTS
 mean = req.avg("_Score")
 print("Mean: ", mean)
 #correlation
+
+
+def flesche_ease(content):
+    features = Features(content)
+    return features.flesch_ease()
+
+def flesche_grade(content):
+    features = Features(content)
+    return features.flesch_grade()
+
+def coleman_liau(content):
+    features = Features(content)
+    return features.coleman_liau()
+
+def code_percentage(content):
+    features = Features(content)
+    return features.code_percentage()
+
+
+flesche_ease_udf = udf(lambda x: flesche_ease(x))
+flesche_grade_udf = udf(lambda x: flesche_grade(x))
+coleman_liau_udf = udf(lambda x: coleman_liau(x))
+code_percentage_udf = udf(lambda x: code_percentage(x))
+# Initialize a copy to do operations on and save later
+metrics = questions.select(col("_AcceptedAnswerId"), col("_Body"))
+
+metrics = metrics.withColumn('flesch_ease', flesche_ease_udf(col("_Body")))
+metrics = metrics.withColumn('flesch_grade', flesche_grade_udf(col("_Body")))
+metrics = metrics.withColumn('coleman', coleman_liau_udf(col("_Body")))
+metrics = metrics.withColumn('code_percentage', code_percentage_udf(col("_Body")))
+print(metrics.show())
+
+# TODO: Write this to metrics.parquet and then use pca.py
+# TODO: fix code_percentage code in features.py
+
