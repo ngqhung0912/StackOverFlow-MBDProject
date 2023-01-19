@@ -2,7 +2,6 @@
 Last modified on 16th Jan.
 Author: Hung.
 
-time spark-submit --master yarn --deploy-mode cluster  create_parquet.py
 
 """
 import re
@@ -26,7 +25,6 @@ def clean_data(content):
 class Stats:
     def __init__(self, content):
         self.content = content
-
 
 
     def word_count(self):
@@ -92,10 +90,5 @@ class Features:
         # numbers between <code> tags / #no chars total
         pass
 
-# Coleman–Liau_index
-def coleman_liau(no_chars, no_sentences, no_words):
-    L = (no_chars / no_words) * 100
-    S = (no_sentences / no_words) * 100
-    return 0.0588 * L - 0.296 * S - 15.8
 
 
