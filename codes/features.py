@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Last modified on 16th Jan.
 Author: Hung.
@@ -9,6 +8,7 @@ time spark-submit --master yarn --deploy-mode cluster  create_parquet.py
 import re
 import nltk
 from nltk.tokenize import sent_tokenize
+
 
 
 def word_count(content):
@@ -49,12 +49,9 @@ def sentence_count(content):
 
 
 # Coleman–Liau_index
-def coleman_liau(cleaned_text):
-    no_chars = char_count(cleaned_text)
-    no_sentences = sentence_count(cleaned_text)
-    no_words = word_count(cleaned_text)
+def coleman_liau(no_chars, no_sentences, no_words):
     L = (no_chars / no_words) * 100
     S = (no_sentences / no_words) * 100
     return 0.0588 * L - 0.296 * S - 15.8
 
-#
+

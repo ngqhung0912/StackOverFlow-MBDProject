@@ -26,7 +26,7 @@ ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
                      "_CommunityOwnedDate")
 
 questions = questions.drop(*ignore_cols_posts)
-posts_df = posts_df.drop(*ignore_cols_posts)
+# posts_df = posts_df.drop(*ignore_cols_posts)
 
 CLEANR = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
 # accepted_answers = posts_df.join(questions.withColumnRenamed("_Id", "_PostId"), col("_Answer_Id") == col("_AcceptedAnswerId"))
