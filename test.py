@@ -1,26 +1,25 @@
-from codes.features import word_count, sentence_count, char_count, coleman_liau, clean_data, flesch_ease, flesch_grade
+from codes.features import Features
 
 import nltk
 nltk.download('punkt')
 
-# from pyspark import SparkContext
-# from pyspark.sql import SQLContext
-# import sys
-# from pyspark.sql.types import *
-# from pyspark.sql import SparkSession
-# import pyspark.sql.functions as f
-#
-# from pyspark.sql.functions import udf, col
+from pyspark import SparkContext
+from pyspark.sql import SQLContext
+import sys
+from pyspark.sql.types import *
+from pyspark.sql import SparkSession
+import pyspark.sql.functions as f
+
+from pyspark.sql.functions import udf, col
+
+spark =
 
 def test(text):
-    text = clean_data(text)
-    print(word_count(text))
-    print(char_count(text))
-    print(sentence_count(text))
-    print(coleman_liau(text))
-    print(flesch_ease(text))
-    print(flesch_grade(text))
-    print(text)
+    features = Features(text)
+    print(features.coleman_liau())
+    print(features.flesch_ease())
+    print(features.flesch_grade())
+    print(features.get_content())
 
 
 test("<p>(can't fit in comment , put it here)</p><p>I think , there is pretty much nothing you can do about this , depending on your hardware , 11 min  can be actually not bad , in the execution plan , I can see everything looks ok.</p> \

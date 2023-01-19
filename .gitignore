@@ -333,3 +333,5 @@ poetry.toml
 .idea
 
 .new_env
+
+new_env.zip
