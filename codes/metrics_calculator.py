@@ -7,12 +7,10 @@ PYSPARK_PYTHON=./envs/MBD-stackoverflow/bin/python spark-submit --conf spark.yar
 from __future__ import division # THIS LINE IS FUCKING IMPORTANT!!!!!
 
 
-
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
 import sys
-# import nltk
-# from nltk.tokenize import sent_tokenize
+import nltk
 
 
 from pyspark.sql import SparkSession
@@ -22,7 +20,12 @@ spark = SparkSession.builder.appName("Colyn").getOrCreate()
 from pyspark.sql.functions import udf, col
 import re
 from pyspark.sql.types import ArrayType, DoubleType, StringType
-import unicodedata
+from nltk.sentiment.util import *
+from nltk.sentiment.vader import SentimentIntensityAnalyzer as sia
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+nltk.download('vader_lexicon')
 
 
 def clean_data(text):
@@ -113,8 +116,15 @@ def code_percentage(original_body, no_char):
         return 0
 
 
-def calculate_metrics(original_body):
+def calculate_cosine_similarity(body_1, body_2):
+    corpus = [body_1, body_2]
+    trsfm = TfidfVectorizer().fit_transform(corpus)
+    return cosine_similarity(trsfm[0], trsfm)[0][1]
+
+
+def calculate_metrics(original_body, original_title):
     cleaned_text = clean_data(original_body)
+    cleaned_title = clean_data(original_title)
     syllables = syllable_count(cleaned_text)
     words = word_count(cleaned_text)
     characters = char_count(cleaned_text)
@@ -123,8 +133,9 @@ def calculate_metrics(original_body):
     flesch_reading_ease = flesch_ease(syllables, sentences, words)
     coleman_liau_index = coleman_liau(characters, sentences, words)
     code_percentages = code_percentage(original_body, characters)
-    return [syllables, words, characters, sentences,
-            flesch_kincaid_grade, flesch_reading_ease, coleman_liau_index, code_percentages]
+    sentiment = sia().polarity_scores(cleaned_text)
+    cosine_similarity_metrics = calculate_cosine_similarity(cleaned_title, cleaned_text)
+    return [flesch_kincaid_grade, flesch_reading_ease, coleman_liau_index, code_percentages, sentiment, cosine_similarity_metrics]
 
 
 small_data_path = "posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"
@@ -135,14 +146,12 @@ ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
                      "_CommunityOwnedDate")
 questions = posts_df.na.drop(subset=["_AcceptedAnswerId"])
 questions = questions.drop(*ignore_cols_posts)
-fix_ascii = udf(
-  lambda str_: unicodedata.normalize('NFD', str_).encode('ASCII', 'ignore')
-)
+# fix_ascii = udf(
+#   lambda str_: unicodedata.normalize('NFD', str_).encode('ASCII', 'ignore')
+# )
+
 questions = questions.filter(col('_Id') < 10000)
 
-
-
-calculate_metrics_udf = udf(lambda body: calculate_metrics(body), ArrayType(StringType()))
-questions = questions.withColumn('metrics', calculate_metrics_udf(fix_ascii((col('_Body')))))
-
-# print(questions.filter(col('metrics')[3].isNotNull()).take(10))
+calculate_metrics_udf = udf(lambda body, title: calculate_metrics(body, title), ArrayType(StringType()))
+questions = questions.withColumn('metrics', calculate_metrics_udf((col('_Body')), col('_Title')))
+# questions.select(col('metrics')).take(1)
