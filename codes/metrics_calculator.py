@@ -138,4 +138,5 @@ questions = questions.filter(col('_Id') < 10000)
 calculate_metrics_udf = udf(lambda body: calculate_metrics(body), ArrayType(DoubleType()))
 questions = questions.withColumn('metrics', calculate_metrics_udf(fix_ascii((col('_Body')))))
 
-print(questions.filter(col('metrics')[3].isNotNull()).take(10))
+# print(questions.filter(col('metrics')[3].isNotNull()).take(10))
+questions.select(col('_Body'), col('metrics')).take(1)
