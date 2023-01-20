@@ -3,8 +3,10 @@ LOCAL RUNNING:
 time spark-submit   --conf "spark.pyspark.python=./../../miniconda3/envs/bigdataEnv/bin/python" --conf "spark.pyspark.driver.python=../../miniconda3/envs/bigdataEnv/bin/python" metrics_calculator.py
 CLUSTER RUNNING:
 PYSPARK_PYTHON=./envs/MBD-stackoverflow/bin/python spark-submit --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./envs/MBD-stackoverflow/bin/python --master yarn-cluster --archives envs/MBD-stackoverflow.zip#MBD-stackoverflow metrics_calculator.py
-
 '''
+from __future__ import division # THIS LINE IS FUCKING IMPORTANT!!!!!
+
+
 
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
@@ -12,14 +14,15 @@ import sys
 # import nltk
 # from nltk.tokenize import sent_tokenize
 
+
 from pyspark.sql import SparkSession
+spark = SparkSession.builder.appName("Colyn").getOrCreate()
+
 
 from pyspark.sql.functions import udf, col
 import re
-from pyspark.sql.types import ArrayType, DoubleType
+from pyspark.sql.types import ArrayType, DoubleType, StringType
 import unicodedata
-
-spark = SparkSession.builder.appName("Colyn").getOrCreate()
 
 
 def clean_data(text):
@@ -95,8 +98,8 @@ def flesch_grade(no_syllables, no_sentences, no_words):
 
 
 def code_percentage(original_body, no_char):
-    if no_char == 0:
-        return None
+    # if no_char == 0:
+    #     return None
     code_text_list = re.findall("<code>.*?</code>", original_body)  # remove code block
     if code_text_list:
         code_texts = ''
@@ -120,7 +123,8 @@ def calculate_metrics(original_body):
     flesch_reading_ease = flesch_ease(syllables, sentences, words)
     coleman_liau_index = coleman_liau(characters, sentences, words)
     code_percentages = code_percentage(original_body, characters)
-    return [flesch_kincaid_grade, flesch_reading_ease, coleman_liau_index, code_percentages]
+    return [syllables, words, characters, sentences,
+            flesch_kincaid_grade, flesch_reading_ease, coleman_liau_index, code_percentages]
 
 
 small_data_path = "posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"
@@ -135,7 +139,10 @@ fix_ascii = udf(
   lambda str_: unicodedata.normalize('NFD', str_).encode('ASCII', 'ignore')
 )
 questions = questions.filter(col('_Id') < 10000)
-calculate_metrics_udf = udf(lambda body: calculate_metrics(body), ArrayType(DoubleType()))
+
+
+
+calculate_metrics_udf = udf(lambda body: calculate_metrics(body), ArrayType(StringType()))
 questions = questions.withColumn('metrics', calculate_metrics_udf(fix_ascii((col('_Body')))))
 
-print(questions.filter(col('metrics')[3].isNotNull()).take(10))
+# print(questions.filter(col('metrics')[3].isNotNull()).take(10))
