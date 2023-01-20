@@ -154,4 +154,5 @@ questions = questions.filter(col('_Id') < 10000)
 
 calculate_metrics_udf = udf(lambda body, title: calculate_metrics(body, title), ArrayType(StringType()))
 questions = questions.withColumn('metrics', calculate_metrics_udf((col('_Body')), col('_Title')))
-# questions.select(col('metrics')).take(1)
+questions.select(col('metrics')).take(1)
+
