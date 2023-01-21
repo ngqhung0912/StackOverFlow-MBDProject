@@ -2,21 +2,12 @@
 LOCAL RUNNING:
 time spark-submit   --conf "spark.pyspark.python=./../../miniconda3/envs/bigdataEnv/bin/python" --conf "spark.pyspark.driver.python=../../miniconda3/envs/bigdataEnv/bin/python" metrics_calculator.py
 CLUSTER RUNNING:
-PYSPARK_PYTHON=./envs/MBD-stackoverflow/bin/python spark-submit --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./envs/MBD-stackoverflow/bin/python --master yarn-cluster --archives envs/MBD-stackoverflow.zip#MBD-stackoverflow metrics_calculator.py
-'''
-from __future__ import division # THIS LINE IS FUCKING IMPORTANT!!!!!
-
-
+# PYSPARK_PYTHON=./MBD-env/MBD-env/bin/python spark-submit --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./MBD-env/MBD-env/bin/python --master yarn --deploy-mode cluster --archives MBD-env.zip#MBD-env metrics_calculator.py'''
+# from __future__ import division # THIS LINE IS FUCKING IMPORTANT FOR PYTHON 2 ONLY!!!!!
+import nltk
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
-import sys
-import nltk
-
-
 from pyspark.sql import SparkSession
-spark = SparkSession.builder.appName("Colyn").getOrCreate()
-
-
 from pyspark.sql.functions import udf, col
 import re
 from pyspark.sql.types import ArrayType, DoubleType, StringType
@@ -24,6 +15,11 @@ from nltk.sentiment.util import *
 from nltk.sentiment.vader import SentimentIntensityAnalyzer as sia
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
+
+# sc = SparkContext(appName="stack_exchange")
+# sc.setLogLevel("ERROR")
+# sqlContext = SQLContext(sc)
+spark = SparkSession.builder.getOrCreate()
 
 nltk.download('vader_lexicon')
 
@@ -101,8 +97,6 @@ def flesch_grade(no_syllables, no_sentences, no_words):
 
 
 def code_percentage(original_body, no_char):
-    # if no_char == 0:
-    #     return None
     code_text_list = re.findall("<code>.*?</code>", original_body)  # remove code block
     if code_text_list:
         code_texts = ''
@@ -119,12 +113,23 @@ def code_percentage(original_body, no_char):
 def calculate_cosine_similarity(body_1, body_2):
     corpus = [body_1, body_2]
     trsfm = TfidfVectorizer().fit_transform(corpus)
-    return cosine_similarity(trsfm[0], trsfm)[0][1]
+    return cosine_similarity(trsfm[0], trsfm).tolist()[0][1]
 
 
-def calculate_metrics(original_body, original_title):
+def clean_tags(raw_tags):
+    tag_lists = raw_tags.split('><')
+    tag_str = ''
+    for i in range(len(tag_lists)):
+        tag_lists[i] = re.sub('>', '', tag_lists[i])
+        tag_lists[i] = re.sub('<', '', tag_lists[i])
+        tag_str += tag_lists[i] + ' '
+    return tag_str
+
+
+def calculate_metrics(original_body, original_title, original_tags):
     cleaned_text = clean_data(original_body)
     cleaned_title = clean_data(original_title)
+    cleaned_tags = clean_tags(original_tags)
     syllables = syllable_count(cleaned_text)
     words = word_count(cleaned_text)
     characters = char_count(cleaned_text)
@@ -133,9 +138,10 @@ def calculate_metrics(original_body, original_title):
     flesch_reading_ease = flesch_ease(syllables, sentences, words)
     coleman_liau_index = coleman_liau(characters, sentences, words)
     code_percentages = code_percentage(original_body, characters)
-    sentiment = sia().polarity_scores(cleaned_text)
-    cosine_similarity_metrics = calculate_cosine_similarity(cleaned_title, cleaned_text)
-    return [flesch_kincaid_grade, flesch_reading_ease, coleman_liau_index, code_percentages, sentiment, cosine_similarity_metrics]
+    sentiment = sia().polarity_scores(cleaned_text)['compound']
+    cosine_similarity_metrics_post_title = calculate_cosine_similarity(cleaned_title, cleaned_text)
+    cosine_similarity_metrics_tags_title = calculate_cosine_similarity(cleaned_tags, cleaned_title)
+    return [flesch_kincaid_grade, flesch_reading_ease, coleman_liau_index, code_percentages, sentiment, cosine_similarity_metrics_post_title, cosine_similarity_metrics_tags_title]
 
 
 small_data_path = "posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"
@@ -144,15 +150,20 @@ ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
                      "_LastEditorUserId", "_LastEditorDisplayName",
                      "_LastEditDate", "_LastActivityDate", "_ContentLicense",
                      "_CommunityOwnedDate")
+
 questions = posts_df.na.drop(subset=["_AcceptedAnswerId"])
+answers = posts_df.filter(col('_PostTypeId') == 2).select(col('_Id'), col('_Body'), col('_CreationDate')).\
+    withColumnRenamed('_Body', 'AcceptedAnswerText').\
+    withColumnRenamed('_CreationDate', 'AcceptedAnswerCreationDate').\
+    withColumnRenamed('_Id', 'AnswerId')
+
+questions = questions.join(answers, questions._AcceptedAnswerId == answers.AnswerId)
+# questions = questions.filter(col('_Id') < 10000)
 questions = questions.drop(*ignore_cols_posts)
-# fix_ascii = udf(
-#   lambda str_: unicodedata.normalize('NFD', str_).encode('ASCII', 'ignore')
-# )
+calculate_metrics_udf = udf(lambda body, title, tags: calculate_metrics(body, title, tags), ArrayType(StringType()))
+questions = questions.withColumn('metrics', calculate_metrics_udf((col('_Body')), col('_Title'), col('_Tags')))
 
-questions = questions.filter(col('_Id') < 10000)
+questions.write.parquet('questions-with-ans-and-metrics.parquet')
+#
 
-calculate_metrics_udf = udf(lambda body, title: calculate_metrics(body, title), ArrayType(StringType()))
-questions = questions.withColumn('metrics', calculate_metrics_udf((col('_Body')), col('_Title')))
-questions.select(col('metrics')).take(1)
-
+# spark-submit   --conf "spark.pyspark.python=./MBD-env/bin/python" metrics_calculator.py
