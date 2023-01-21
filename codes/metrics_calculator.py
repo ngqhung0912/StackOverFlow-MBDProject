@@ -13,21 +13,23 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf, col, to_timestamp, year
 import re
 from pyspark.sql.types import ArrayType, DoubleType, StringType
+# import nltk
+# from nltk.sentiment.util import *
+# from nltk.sentiment.vader import SentimentIntensityAnalyzer as sia
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
+from pyspark import SparkFiles
+
 
 # sc = SparkContext(appName="stack_exchange")
 # sc.setLogLevel("ERROR")
 # sqlContext = SQLContext(sc)
 spark = SparkSession.builder.getOrCreate()
-
-import nltk
-from nltk.sentiment.util import *
-from nltk.sentiment.vader import SentimentIntensityAnalyzer as sia
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import TfidfVectorizer
-
-
-nltk.download('vader_lexicon')
-
+# spark.sparkContext.addFile('hdfs:///user/s2096307/nltk_data', recursive=True)
+# nltk_path = SparkFiles.get('nltk_data')
+# print(nltk_path)
+# nltk.data.path.append('nltk_data/nltk_data')
+# nltk.download('vader_lexicon', download_dir=nltk_path)
 
 def clean_data(text):
     rules = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
@@ -143,13 +145,14 @@ def calculate_metrics(original_body, original_title, original_tags):
     flesch_reading_ease = flesch_ease(syllables, sentences, words)
     coleman_liau_index = coleman_liau(characters, sentences, words)
     code_percentages = code_percentage(original_body, characters)
-    sentiment = sia().polarity_scores(cleaned_text)['compound']
+    # sentiment = sia().polarity_scores(cleaned_text)['compound']
     cosine_similarity_metrics_post_title = calculate_cosine_similarity(cleaned_title, cleaned_text)
     cosine_similarity_metrics_tags_title = calculate_cosine_similarity(cleaned_tags, cleaned_title)
-    return [flesch_kincaid_grade, flesch_reading_ease, coleman_liau_index, code_percentages, sentiment, cosine_similarity_metrics_post_title, cosine_similarity_metrics_tags_title]
+    return [flesch_kincaid_grade, flesch_reading_ease, coleman_liau_index, code_percentages,
+            cosine_similarity_metrics_post_title, cosine_similarity_metrics_tags_title]
 
 
-small_data_path = "posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"
+data_path = "posts.parquet"
 posts_df = spark.read.parquet(small_data_path)
 ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
                      "_LastEditorUserId", "_LastEditorDisplayName",
@@ -169,7 +172,7 @@ questions = questions.join(answers, questions._AcceptedAnswerId == answers.Answe
 calculate_metrics_udf = udf(lambda body, title, tags: calculate_metrics(body, title, tags), ArrayType(StringType()))
 questions = questions.withColumn('metrics', calculate_metrics_udf((col('_Body')), col('_Title'), col('_Tags')))
 
-questions.write.parquet('questions-with-ans-and-metrics-cluster.parquet')
-#
+questions.write.mode('overwrite').parquet('questions-with-ans-and-metrics-cluster.parquet')
+
 
 # spark-submit   --conf "spark.pyspark.python=./MBD-env/bin/python" metrics_calculator.py
