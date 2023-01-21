@@ -4,22 +4,27 @@ time spark-submit   --conf "spark.pyspark.python=./../../miniconda3/envs/bigdata
 CLUSTER RUNNING:
 # PYSPARK_PYTHON=./MBD-env/MBD-env/bin/python spark-submit --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./MBD-env/MBD-env/bin/python --master yarn --deploy-mode cluster --archives MBD-env.zip#MBD-env metrics_calculator.py'''
 # from __future__ import division # THIS LINE IS FUCKING IMPORTANT FOR PYTHON 2 ONLY!!!!!
-import nltk
+
+
+
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col
+from pyspark.sql.functions import udf, col, to_timestamp, year
 import re
 from pyspark.sql.types import ArrayType, DoubleType, StringType
-from nltk.sentiment.util import *
-from nltk.sentiment.vader import SentimentIntensityAnalyzer as sia
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 # sc = SparkContext(appName="stack_exchange")
 # sc.setLogLevel("ERROR")
 # sqlContext = SQLContext(sc)
 spark = SparkSession.builder.getOrCreate()
+
+import nltk
+from nltk.sentiment.util import *
+from nltk.sentiment.vader import SentimentIntensityAnalyzer as sia
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 
 nltk.download('vader_lexicon')
 
@@ -156,14 +161,15 @@ answers = posts_df.filter(col('_PostTypeId') == 2).select(col('_Id'), col('_Body
     withColumnRenamed('_Body', 'AcceptedAnswerText').\
     withColumnRenamed('_CreationDate', 'AcceptedAnswerCreationDate').\
     withColumnRenamed('_Id', 'AnswerId')
+questions = questions.drop(*ignore_cols_posts).withColumn("_CreationDate", to_timestamp("_CreationDate")).withColumn("Year", year("_CreationDate")).drop('_CreationDate').filter(col('Year') > 2019)
+
 
 questions = questions.join(answers, questions._AcceptedAnswerId == answers.AnswerId)
 # questions = questions.filter(col('_Id') < 10000)
-questions = questions.drop(*ignore_cols_posts)
 calculate_metrics_udf = udf(lambda body, title, tags: calculate_metrics(body, title, tags), ArrayType(StringType()))
 questions = questions.withColumn('metrics', calculate_metrics_udf((col('_Body')), col('_Title'), col('_Tags')))
 
-questions.write.parquet('questions-with-ans-and-metrics.parquet')
+questions.write.parquet('questions-with-ans-and-metrics-cluster.parquet')
 #
 
 # spark-submit   --conf "spark.pyspark.python=./MBD-env/bin/python" metrics_calculator.py
