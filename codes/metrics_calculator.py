@@ -162,7 +162,7 @@ def calculate_metrics(original_body, original_title, original_tags, original_ans
             cosine_similarity_metrics_post_title, cosine_similarity_metrics_tags_title]
 
 
-data_path = "posts.parquet/part-00006-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"
+data_path = "posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"
 posts_df = spark.read.parquet(data_path)
 ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
                      "_LastEditorUserId", "_LastEditorDisplayName",
