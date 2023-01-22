@@ -13,22 +13,16 @@ from pyspark.sql.functions import udf, col, to_timestamp, year, datediff, hour, 
 import re
 from pyspark.sql.types import ArrayType, DoubleType, StringType
 # import nltk
-# from nltk.sentiment.util import *
-# from nltk.sentiment.vader import SentimentIntensityAnalyzer as sia
+from nltk.sentiment.util import *
+from nltk.sentiment.vader import SentimentIntensityAnalyzer as sia
+import nltk
+from nltk import sent_tokenize
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# sc = SparkContext(appName="stack_exchange")
-# sc.setLogLevel("ERROR")
-# sqlContext = SQLContext(sc)
 spark = SparkSession.builder.getOrCreate()
 
-
-# spark.sparkContext.addFile('hdfs:///user/s2096307/nltk_data', recursive=True)
-# nltk_path = SparkFiles.get('nltk_data')
-# print(nltk_path)
-# nltk.data.path.append('nltk_data/nltk_data')
-# nltk.download('vader_lexicon', download_dir=nltk_path)
+nltk.data.path.append('/new_env/new_env/nltk_data')
 
 def clean_data(text, codeless=True):
     rules = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
@@ -48,18 +42,7 @@ def char_count(content):
 
 
 def sentence_count(content):
-    sentences = 0
-    seen_end = False
-    sentence_end = {'?', '!', '.', '...'}
-    for c in content:
-        if c in sentence_end:
-            if not seen_end:
-                seen_end = True
-                sentences += 1
-            continue
-        seen_end = False
-    return sentences if sentences != 0 else 1
-
+    return len(sent_tokenize(content))
 
 def syllable_count(text):
     count = 0
@@ -155,21 +138,25 @@ def calculate_metrics(original_body, original_title, original_tags, original_ans
     flesch_reading_ease = flesch_ease(syllables, sentences, words)
     coleman_liau_index = coleman_liau(characters, sentences, words)
     code_percentages = code_percentage(original_body, characters)
-    # sentiment = sia().polarity_scores(cleaned_text)['compound']
+    sentiment = sia().polarity_scores(cleaned_text)['compound']
     cosine_similarity_metrics_post_title = calculate_cosine_similarity(cleaned_title, cleaned_text)
     cosine_similarity_metrics_tags_title = calculate_cosine_similarity(cleaned_tags, cleaned_title)
     return [flesch_kincaid_grade, flesch_reading_ease, coleman_liau_index, code_percentages,
-            cosine_similarity_metrics_post_title, cosine_similarity_metrics_tags_title]
+            cosine_similarity_metrics_post_title, cosine_similarity_metrics_tags_title, sentiment]
 
 
-data_path = "posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"
-posts_df = spark.read.parquet(data_path)
+data_path = ["posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet",
+             "posts.parquet/part-00001-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet",
+             "posts.parquet/part-00002-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"]
+suuper_big_data_path = 'posts.parquet'
 ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
                      "_LastEditorUserId", "_LastEditorDisplayName",
                      "_LastEditDate", "_LastActivityDate", "_ContentLicense",
                      "_CommunityOwnedDate")
+posts_df = spark.read.parquet(suuper_big_data_path).drop(*ignore_cols_posts)
 
-questions = posts_df.na.drop(subset=["_AcceptedAnswerId"])
+# questions = posts_df.na.drop(subset=["_AcceptedAnswerId"])
+questions = posts_df.filter(col('_PostTypeId') == 2)
 
 answers = posts_df.filter(col('_PostTypeId') == 2).select(col('_Id'), col('_Body'), col('_CreationDate')). \
     withColumnRenamed('_Body', 'AcceptedAnswerText'). \
@@ -186,7 +173,6 @@ clean_tags_udf = udf(lambda tags: clean_tags_list(tags), ArrayType(StringType())
 #     questions = questions.merge()
 
 questions = questions.join(answers, questions._AcceptedAnswerId == answers.AnswerId). \
-    drop(*ignore_cols_posts). \
     withColumn("_CreationDate", to_timestamp("_CreationDate")). \
     withColumn("Year", year("_CreationDate")). \
     filter(col('Year') > 2020). \
@@ -205,8 +191,10 @@ questions = questions.join(answers, questions._AcceptedAnswerId == answers.Answe
     withColumn('Coleman_Liau_index', col('metrics')[2]). \
     withColumn('code_percentage', col('metrics')[3]). \
     withColumn('cos_sim_post_title', col('metrics')[4]). \
-    withColumn('cos_sim_title_tag', col('metrics')[5])
+    withColumn('cos_sim_title_tag', col('metrics')[5]). \
+    withColumn('sentiment', col('metrics')[6])
 
-questions.repartition(10).write.mode('overwrite').parquet('questions-with-ans-and-metrics-cluster-small.parquet')
+questions.repartition(30).write.mode('overwrite').\
+    parquet('questions-with-ans-and-metrics-cluster-FINAL-INCL-EVERYTHING.parquet')
 
 # spark-submit   --conf "spark.pyspark.python=./MBD-env/bin/python" metrics_calculator.py
