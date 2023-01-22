@@ -6,11 +6,10 @@ CLUSTER RUNNING:
 # from __future__ import division # THIS LINE IS FUCKING IMPORTANT FOR PYTHON 2 ONLY!!!!!
 
 
-
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col, to_timestamp, year
+from pyspark.sql.functions import udf, col, to_timestamp, year, datediff, hour, minute, unix_timestamp
 import re
 from pyspark.sql.types import ArrayType, DoubleType, StringType
 # import nltk
@@ -18,24 +17,25 @@ from pyspark.sql.types import ArrayType, DoubleType, StringType
 # from nltk.sentiment.vader import SentimentIntensityAnalyzer as sia
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
-from pyspark import SparkFiles
-
 
 # sc = SparkContext(appName="stack_exchange")
 # sc.setLogLevel("ERROR")
 # sqlContext = SQLContext(sc)
 spark = SparkSession.builder.getOrCreate()
+
+
 # spark.sparkContext.addFile('hdfs:///user/s2096307/nltk_data', recursive=True)
 # nltk_path = SparkFiles.get('nltk_data')
 # print(nltk_path)
 # nltk.data.path.append('nltk_data/nltk_data')
 # nltk.download('vader_lexicon', download_dir=nltk_path)
 
-def clean_data(text):
+def clean_data(text, codeless=True):
     rules = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
     text = text.lower()
-    codeless_text = re.sub("<code>.*?</code>", "", text)  # remove code block
-    cleantext = re.sub(rules, '', codeless_text)
+    if codeless:
+        text = re.sub("<code>.*?</code>", "", text)  # remove code block
+    cleantext = re.sub(rules, '', text)
     return cleantext
 
 
@@ -133,7 +133,17 @@ def clean_tags(raw_tags):
     return tag_str
 
 
-def calculate_metrics(original_body, original_title, original_tags):
+def clean_tags_list(raw_tags):
+    tag_lists = raw_tags.split('><')
+    tag_lists_cleaned = []
+    for i in range(len(tag_lists)):
+        tag_lists[i] = re.sub('>', '', tag_lists[i])
+        tag_lists[i] = re.sub('<', '', tag_lists[i])
+        tag_lists_cleaned.append(tag_lists[i])
+    return tag_lists_cleaned
+
+
+def calculate_metrics(original_body, original_title, original_tags, original_answer):
     cleaned_text = clean_data(original_body)
     cleaned_title = clean_data(original_title)
     cleaned_tags = clean_tags(original_tags)
@@ -144,7 +154,7 @@ def calculate_metrics(original_body, original_title, original_tags):
     flesch_kincaid_grade = flesch_grade(syllables, sentences, words)
     flesch_reading_ease = flesch_ease(syllables, sentences, words)
     coleman_liau_index = coleman_liau(characters, sentences, words)
-    code_percentages = code_percentage(original_body, characters)
+    code_percentages = code_percentage(original_body, char_count(clean_data(original_body, codeless=False)))
     # sentiment = sia().polarity_scores(cleaned_text)['compound']
     cosine_similarity_metrics_post_title = calculate_cosine_similarity(cleaned_title, cleaned_text)
     cosine_similarity_metrics_tags_title = calculate_cosine_similarity(cleaned_tags, cleaned_title)
@@ -152,27 +162,51 @@ def calculate_metrics(original_body, original_title, original_tags):
             cosine_similarity_metrics_post_title, cosine_similarity_metrics_tags_title]
 
 
-data_path = "posts.parquet"
-posts_df = spark.read.parquet(small_data_path)
+data_path = "posts.parquet/part-00006-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"
+posts_df = spark.read.parquet(data_path)
 ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
                      "_LastEditorUserId", "_LastEditorDisplayName",
                      "_LastEditDate", "_LastActivityDate", "_ContentLicense",
                      "_CommunityOwnedDate")
 
 questions = posts_df.na.drop(subset=["_AcceptedAnswerId"])
-answers = posts_df.filter(col('_PostTypeId') == 2).select(col('_Id'), col('_Body'), col('_CreationDate')).\
-    withColumnRenamed('_Body', 'AcceptedAnswerText').\
-    withColumnRenamed('_CreationDate', 'AcceptedAnswerCreationDate').\
+
+answers = posts_df.filter(col('_PostTypeId') == 2).select(col('_Id'), col('_Body'), col('_CreationDate')). \
+    withColumnRenamed('_Body', 'AcceptedAnswerText'). \
+    withColumnRenamed('_CreationDate', 'AcceptedAnswerCreationDate'). \
     withColumnRenamed('_Id', 'AnswerId')
-questions = questions.drop(*ignore_cols_posts).withColumn("_CreationDate", to_timestamp("_CreationDate")).withColumn("Year", year("_CreationDate")).drop('_CreationDate').filter(col('Year') > 2019)
 
+calculate_metrics_udf = \
+    udf(lambda body, title, tags, answer: calculate_metrics(body, title, tags, answer), ArrayType(StringType()))
+clean_tags_udf = udf(lambda tags: clean_tags_list(tags), ArrayType(StringType()))
 
-questions = questions.join(answers, questions._AcceptedAnswerId == answers.AnswerId)
-# questions = questions.filter(col('_Id') < 10000)
-calculate_metrics_udf = udf(lambda body, title, tags: calculate_metrics(body, title, tags), ArrayType(StringType()))
-questions = questions.withColumn('metrics', calculate_metrics_udf((col('_Body')), col('_Title'), col('_Tags')))
+# years = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
+# for year in years:
+#     questions_year = questions.
+#     questions = questions.merge()
 
-questions.write.mode('overwrite').parquet('questions-with-ans-and-metrics-cluster.parquet')
+questions = questions.join(answers, questions._AcceptedAnswerId == answers.AnswerId). \
+    drop(*ignore_cols_posts). \
+    withColumn("_CreationDate", to_timestamp("_CreationDate")). \
+    withColumn("Year", year("_CreationDate")). \
+    filter(col('Year') > 2020). \
+    drop(col('Year')). \
+    withColumn("AcceptedAnswerCreationDate", to_timestamp("AcceptedAnswerCreationDate")). \
+    withColumn("TagsList", clean_tags_udf(col('_Tags'))).\
+    withColumn('metrics',
+               calculate_metrics_udf((col('_Body')), col('_Title'), col('_Tags'), col('AcceptedAnswerText'))). \
+    withColumn('AnswerDurationSeconds',
+               unix_timestamp(col('AcceptedAnswerCreationDate')) - unix_timestamp(col('_CreationDate'))). \
+    withColumn('AnswerDurationDays', datediff(col('AcceptedAnswerCreationDate'), col('_CreationDate'))). \
+    withColumn('AnswerDurationMinute', col('AnswerDurationSeconds') / 60). \
+    withColumn('AnswerDurationHour', col('AnswerDurationMinute') / 60). \
+    withColumn('Flesch_Kincard_Grade', col('metrics')[0]). \
+    withColumn('Flesch_reading_ease', col('metrics')[1]). \
+    withColumn('Coleman_Liau_index', col('metrics')[2]). \
+    withColumn('code_percentage', col('metrics')[3]). \
+    withColumn('cos_sim_post_title', col('metrics')[4]). \
+    withColumn('cos_sim_title_tag', col('metrics')[5])
 
+questions.repartition(10).write.mode('overwrite').parquet('questions-with-ans-and-metrics-cluster-small.parquet')
 
 # spark-submit   --conf "spark.pyspark.python=./MBD-env/bin/python" metrics_calculator.py
