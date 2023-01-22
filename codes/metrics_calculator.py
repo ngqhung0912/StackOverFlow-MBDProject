@@ -112,7 +112,7 @@ def code_percentage(original_body, no_char):
         code_texts = re.sub("<code>", '', code_texts)
         code_texts = re.sub("</code>", '', code_texts)
         code_chars = len(code_texts)
-        return code_chars / no_char
+        return code_chars / (no_char + code_chars)
     else:
         return 0
 
@@ -154,7 +154,7 @@ def calculate_metrics(original_body, original_title, original_tags, original_ans
     flesch_kincaid_grade = flesch_grade(syllables, sentences, words)
     flesch_reading_ease = flesch_ease(syllables, sentences, words)
     coleman_liau_index = coleman_liau(characters, sentences, words)
-    code_percentages = code_percentage(original_body, char_count(clean_data(original_body, codeless=False)))
+    code_percentages = code_percentage(original_body, characters)
     # sentiment = sia().polarity_scores(cleaned_text)['compound']
     cosine_similarity_metrics_post_title = calculate_cosine_similarity(cleaned_title, cleaned_text)
     cosine_similarity_metrics_tags_title = calculate_cosine_similarity(cleaned_tags, cleaned_title)
