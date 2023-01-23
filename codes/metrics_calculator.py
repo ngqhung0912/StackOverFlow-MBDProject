@@ -1,8 +1,9 @@
 '''
-LOCAL RUNNING:
-time spark-submit   --conf "spark.pyspark.python=./../../miniconda3/envs/bigdataEnv/bin/python" --conf "spark.pyspark.driver.python=../../miniconda3/envs/bigdataEnv/bin/python" metrics_calculator.py
-CLUSTER RUNNING:
-# PYSPARK_PYTHON=./MBD-env/MBD-env/bin/python spark-submit --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./MBD-env/MBD-env/bin/python --master yarn --deploy-mode cluster --archives MBD-env.zip#MBD-env metrics_calculator.py'''
+LOCAL RUNNING: time spark-submit   --conf "spark.pyspark.python=./../../miniconda3/envs/bigdataEnv/bin/python"
+--conf "spark.pyspark.driver.python=../../miniconda3/envs/bigdataEnv/bin/python" metrics_calculator.py
+
+CLUSTER RUNNING: PYSPARK_PYTHON=./stackoverflow_env/stackoverflow_env/bin/python spark-submit --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./stackoverflow_env/stackoverflow_env/bin/python --master yarn --deploy-mode cluster --archives stackoverflow_env.zip#stackoverflow_env  metrics_calculator.py
+'''
 # from __future__ import division # THIS LINE IS FUCKING IMPORTANT FOR PYTHON 2 ONLY!!!!!
 
 
@@ -21,14 +22,16 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 spark = SparkSession.builder.getOrCreate()
+nltk.data.path.append('/stackoverflow_env/stackoverflow_env/nltk_data')
 
-nltk.data.path.append('/new_env/new_env/nltk_data')
+RULE_CODES = re.compile('<code>.*?</code>', re.DOTALL)
+
 
 def clean_data(text, codeless=True):
     rules = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
     text = text.lower()
     if codeless:
-        text = re.sub("<code>.*?</code>", "", text)  # remove code block
+        text = re.sub(RULE_CODES, "", text)  # remove code block
     cleantext = re.sub(rules, '', text)
     return cleantext
 
@@ -43,6 +46,7 @@ def char_count(content):
 
 def sentence_count(content):
     return len(sent_tokenize(content))
+
 
 def syllable_count(text):
     count = 0
@@ -87,7 +91,7 @@ def flesch_grade(no_syllables, no_sentences, no_words):
 
 
 def code_percentage(original_body, no_char):
-    code_text_list = re.findall("<code>.*?</code>", original_body)  # remove code block
+    code_text_list = re.findall(RULE_CODES, original_body)  # remove code block
     if code_text_list:
         code_texts = ''
         for code_text in code_text_list:
@@ -148,6 +152,7 @@ def calculate_metrics(original_body, original_title, original_tags, original_ans
 data_path = ["posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet",
              "posts.parquet/part-00001-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet",
              "posts.parquet/part-00002-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"]
+
 suuper_big_data_path = 'posts.parquet'
 ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
                      "_LastEditorUserId", "_LastEditorDisplayName",
@@ -156,10 +161,10 @@ ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
 posts_df = spark.read.parquet(suuper_big_data_path).drop(*ignore_cols_posts)
 
 # questions = posts_df.na.drop(subset=["_AcceptedAnswerId"])
-questions = posts_df.filter(col('_PostTypeId') == 2)
+questions = posts_df.filter(col('_PostTypeId') == 1)
 
 answers = posts_df.filter(col('_PostTypeId') == 2).select(col('_Id'), col('_Body'), col('_CreationDate')). \
-    withColumnRenamed('_Body', 'AcceptedAnswerText'). \
+    withColumnRenamed('_Body', ''). \
     withColumnRenamed('_CreationDate', 'AcceptedAnswerCreationDate'). \
     withColumnRenamed('_Id', 'AnswerId')
 
@@ -167,16 +172,17 @@ calculate_metrics_udf = \
     udf(lambda body, title, tags, answer: calculate_metrics(body, title, tags, answer), ArrayType(StringType()))
 clean_tags_udf = udf(lambda tags: clean_tags_list(tags), ArrayType(StringType()))
 
-# years = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
+questions = questions.withColumn("_CreationDate", to_timestamp("_CreationDate")). \
+    withColumn("Year", year("_CreationDate"))
+
+# years = [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
+# new_questions = questions.filter(col("Year") == 2008).sample(fractions=0.1)
 # for year in years:
-#     questions_year = questions.
-#     questions = questions.merge()
+#     questions_year = questions.filter(col("Year") == year).sample(fractions=0.1)
+#     new_questions = new_questions.union(questions_year)
+# questions = new_questions
 
 questions = questions.join(answers, questions._AcceptedAnswerId == answers.AnswerId). \
-    withColumn("_CreationDate", to_timestamp("_CreationDate")). \
-    withColumn("Year", year("_CreationDate")). \
-    filter(col('Year') > 2020). \
-    drop(col('Year')). \
     withColumn("AcceptedAnswerCreationDate", to_timestamp("AcceptedAnswerCreationDate")). \
     withColumn("TagsList", clean_tags_udf(col('_Tags'))).\
     withColumn('metrics',
@@ -192,7 +198,8 @@ questions = questions.join(answers, questions._AcceptedAnswerId == answers.Answe
     withColumn('code_percentage', col('metrics')[3]). \
     withColumn('cos_sim_post_title', col('metrics')[4]). \
     withColumn('cos_sim_title_tag', col('metrics')[5]). \
-    withColumn('sentiment', col('metrics')[6])
+    withColumn('sentiment', col('metrics')[6]).\
+    drop(col('_Body'), col('AcceptedAnswerText'), col('Year'))
 
 questions.repartition(30).write.mode('overwrite').\
     parquet('questions-with-ans-and-metrics-cluster-FINAL-INCL-EVERYTHING.parquet')
