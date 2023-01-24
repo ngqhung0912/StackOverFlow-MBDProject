@@ -1,8 +1,10 @@
 '''
-LOCAL RUNNING: time spark-submit   --conf "spark.pyspark.python=./../../miniconda3/envs/bigdataEnv/bin/python"
+LOCAL RUNNING:
+time spark-submit   --conf "spark.pyspark.python=./../../miniconda3/envs/bigdataEnv/bin/python"
 --conf "spark.pyspark.driver.python=../../miniconda3/envs/bigdataEnv/bin/python" metrics_calculator.py
 
-CLUSTER RUNNING: PYSPARK_PYTHON=./stackoverflow_env/stackoverflow_env/bin/python spark-submit --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./stackoverflow_env/stackoverflow_env/bin/python --master yarn --deploy-mode cluster --archives stackoverflow_env.zip#stackoverflow_env  metrics_calculator.py
+CLUSTER RUNNING:
+ PYSPARK_PYTHON=./stackoverflow_env/stackoverflow_env/bin/python spark-submit --conf spark.dynamicAllocation.maxExecutors=15 --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./stackoverflow_env/stackoverflow_env/bin/python --master yarn --deploy-mode cluster --archives stackoverflow_env.zip#stackoverflow_env  metrics_calculator.py
 '''
 # from __future__ import division # THIS LINE IS FUCKING IMPORTANT FOR PYTHON 2 ONLY!!!!!
 
@@ -130,7 +132,7 @@ def clean_tags_list(raw_tags):
     return tag_lists_cleaned
 
 
-def calculate_metrics(original_body, original_title, original_tags, original_answer):
+def calculate_metrics(original_body, original_title, original_tags):
     cleaned_text = clean_data(original_body)
     cleaned_title = clean_data(original_title)
     cleaned_tags = clean_tags(original_tags)
@@ -169,24 +171,23 @@ answers = posts_df.filter(col('_PostTypeId') == 2).select(col('_Id'), col('_Body
     withColumnRenamed('_Id', 'AnswerId')
 
 calculate_metrics_udf = \
-    udf(lambda body, title, tags, answer: calculate_metrics(body, title, tags, answer), ArrayType(StringType()))
-clean_tags_udf = udf(lambda tags: clean_tags_list(tags), ArrayType(StringType()))
+    udf(lambda body, title, tags: calculate_metrics(body, title, tags), ArrayType(StringType()))
 
 questions = questions.withColumn("_CreationDate", to_timestamp("_CreationDate")). \
-    withColumn("Year", year("_CreationDate"))
+    withColumn("Year", year("_CreationDate")).repartition(10, col('_AcceptedAnswerId'))
 
-# years = [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
-# new_questions = questions.filter(col("Year") == 2008).sample(fractions=0.1)
-# for year in years:
-#     questions_year = questions.filter(col("Year") == year).sample(fractions=0.1)
-#     new_questions = new_questions.union(questions_year)
-# questions = new_questions
+years = [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
+new_questions = questions.filter(col("Year") == 2008).sample(fraction=0.1)
+for year in years:
+    questions_year = questions.filter(col("Year") == year).sample(fraction=0.1)
+    new_questions = new_questions.union(questions_year)
+questions = new_questions
+answers = answers.repartition(10, col('AnswerId'))
 
 questions = questions.join(answers, questions._AcceptedAnswerId == answers.AnswerId). \
     withColumn("AcceptedAnswerCreationDate", to_timestamp("AcceptedAnswerCreationDate")). \
-    withColumn("TagsList", clean_tags_udf(col('_Tags'))).\
     withColumn('metrics',
-               calculate_metrics_udf((col('_Body')), col('_Title'), col('_Tags'), col('AcceptedAnswerText'))). \
+               calculate_metrics_udf((col('_Body')), col('_Title'), col('_Tags'))). \
     withColumn('AnswerDurationSeconds',
                unix_timestamp(col('AcceptedAnswerCreationDate')) - unix_timestamp(col('_CreationDate'))). \
     withColumn('AnswerDurationDays', datediff(col('AcceptedAnswerCreationDate'), col('_CreationDate'))). \
@@ -199,9 +200,9 @@ questions = questions.join(answers, questions._AcceptedAnswerId == answers.Answe
     withColumn('cos_sim_post_title', col('metrics')[4]). \
     withColumn('cos_sim_title_tag', col('metrics')[5]). \
     withColumn('sentiment', col('metrics')[6]).\
-    drop(col('_Body'), col('AcceptedAnswerText'), col('Year'))
+    drop('_Body', 'Year')
 
-questions.repartition(30).write.mode('overwrite').\
+questions.repartition(10).write.mode('overwrite').\
     parquet('questions-with-ans-and-metrics-cluster-FINAL-INCL-EVERYTHING.parquet')
 
-# spark-submit   --conf "spark.pyspark.python=./MBD-env/bin/python" metrics_calculator.py
+# pyspark --conf "spark.pyspark.python=/usr/bin/python3.6"
