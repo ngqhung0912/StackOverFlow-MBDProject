@@ -36,7 +36,7 @@ def clean_data(text: str, codeless=True) -> str:
     :return: Cleaned text.
     """
     rules = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
-    text = text.lower()
+    # text = text.lower()
     if codeless:
         text = re.sub(RULE_CODES, "", text)  # remove code block
     cleantext = re.sub(rules, '', text)
@@ -282,7 +282,7 @@ questions = questions.join(answers, questions._AcceptedAnswerId == answers.Answe
     withColumn('sentiment', col('metrics')[6]). \
     drop('_Body', 'Year')
 
-questions.repartition(20).write.mode('overwrite'). \
-    parquet('questions-with-ans-and-metrics-cluster-Final-BigDataALERT.parquet')
+# questions.repartition(20).write.mode('overwrite'). \
+#     parquet('questions-with-ans-and-metrics-cluster-Final-BigDataALERT.parquet')
 
 # pyspark --conf "spark.pyspark.python=/usr/bin/python3.6"
