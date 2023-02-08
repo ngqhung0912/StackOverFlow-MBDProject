@@ -123,7 +123,7 @@ def flesch_ease(no_syllables: int, no_sentences: int, no_words: int) -> float:
     return 206.835 - (1.015 * words_per_sent) - (84.6 * syll_per_word)
 
 
-def flesch_grade(no_syllables, no_sentences, no_words) -> float:
+def flesch_grade(no_syllables: int, no_sentences: int, no_words: int) -> float:
     """
     Calculate the Flesch-Kincaid score for a paragraph.
     :param no_syllables: Number of characters.
@@ -165,9 +165,14 @@ def calculate_cosine_similarity(body_1: str, body_2: str) -> float:
     :param body_2: Text body 2.
     :return: Cosine Similarity Scores.
     """
-    corpus = [body_1, body_2]
-    transform_tfidf = TfidfVectorizer().fit_transform(corpus)
-    return cosine_similarity(transform_tfidf[0], transform_tfidf).tolist()[0][1]
+    if not body_1 or not body_2:
+        return 0
+    try:
+        corpus = [body_1, body_2]
+        transform_tfidf = TfidfVectorizer().fit_transform(corpus)
+        return cosine_similarity(transform_tfidf[0], transform_tfidf).tolist()[0][1]
+    except ValueError:
+        return 0
 
 
 def clean_tags(raw_tags: str) -> str:
@@ -203,8 +208,8 @@ def clean_tags_list(raw_tags: str) -> list:
 
 def calculate_metrics(original_body: str, original_title: str, original_tags: str) -> list:
     """
-    Calculate the defined metrics: Flesch-Kincaid grade, Flesch Reading Ease, Coleman-Liau index, sentiment of post,
-    cosine similarity between post and title/tag and title.
+    Calculate the defined metrics: Flesc    h-Kincaid grade, Flesch Reading Ease, Coleman-Liau index, sentiment of post,
+    cosine similarity between post and title/tag and title, and code percentage.
     :param original_body: Original (uncleaned body of post).
     :param original_title: Original (uncleaned title of post).
     :param original_tags: Original (uncleaned tags of post).
@@ -230,16 +235,19 @@ def calculate_metrics(original_body: str, original_title: str, original_tags: st
     return [0] * 7
 
 
-data_path = ["posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet",
-             "posts.parquet/part-00001-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet",
-             "posts.parquet/part-00002-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"]
+data_path = ["posts.parquet/part-00000-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet", ]
+# "posts.parquet/part-00001-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet",
+# "posts.parquet/part-00002-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet", ]
+# "posts.parquet/part-00003-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet",
+# "posts.parquet/part-00004-dfdedfcd-0d15-452e-bab4-48f6cf9a8276-c000.snappy.parquet"]
+
 
 suuper_big_data_path = 'posts.parquet'
 ignore_cols_posts = ("_LastEditDate", "_OwnerUserId",
                      "_LastEditorUserId", "_LastEditorDisplayName",
                      "_LastEditDate", "_LastActivityDate", "_ContentLicense",
                      "_CommunityOwnedDate")
-posts_df = spark.read.parquet(suuper_big_data_path).drop(*ignore_cols_posts)
+posts_df = spark.read.parquet(*data_path).drop(*ignore_cols_posts)
 
 # questions = posts_df.na.drop(subset=["_AcceptedAnswerId"])
 questions = posts_df.filter(col('_PostTypeId') == 1)
@@ -252,37 +260,60 @@ calculate_metrics_udf = \
     udf(lambda body, title, tags: calculate_metrics(body, title, tags), ArrayType(StringType()))
 
 questions = questions.withColumn("_CreationDate", to_timestamp("_CreationDate")). \
-    withColumn("Year", year("_CreationDate")).repartition(20, col('_AcceptedAnswerId'))
+    withColumn("Year", year("_CreationDate"))
 
 years = [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
-new_questions = questions.filter(col("Year") == 2008) \
-    .sample(fraction=0.1)
-for year in years:
-    questions_year = questions.filter(col("Year") == year) \
-        .sample(fraction=0.1)
-    new_questions = new_questions.union(questions_year)
-questions = new_questions
+# new_questions = questions.filter(col("Year") == 2008) \
+#     .sample(fraction=0.1)
+# for year in years:
+#     questions_year = questions.filter(col("Year") == year) \
+#         .sample(fraction=0.1)
+#     new_questions = new_questions.union(questions_year)
+# questions = new_questions
 answers = answers.repartition(20, col('AnswerId'))
 
+# questions = questions.join(answers, questions._AcceptedAnswerId == answers.AnswerId, 'leftouter'). \
+#     withColumn("AcceptedAnswerCreationDate", to_timestamp("AcceptedAnswerCreationDate")). \
+#     withColumn('metrics',
+#                calculate_metrics_udf((col('_Body')), col('_Title'), col('_Tags'))). \
+#     withColumn('AnswerDurationSeconds',
+#                unix_timestamp(col('AcceptedAnswerCreationDate')) - unix_timestamp(col('_CreationDate'))). \
+#     withColumn('AnswerDurationDays', datediff(col('AcceptedAnswerCreationDate'), col('_CreationDate'))). \
+#     withColumn('AnswerDurationMinute', col('AnswerDurationSeconds') / 60). \
+#     withColumn('AnswerDurationHour', col('AnswerDurationMinute') / 60). \
+#     withColumn('Flesch_Kincard_Grade', col('metrics')[0]). \
+#     withColumn('Flesch_reading_ease', col('metrics')[1]). \
+#     withColumn('Coleman_Liau_index', col('metrics')[2]). \
+#     withColumn('code_percentage', col('metrics')[3]). \
+#     withColumn('cos_sim_post_title', col('metrics')[4]). \
+#     withColumn('cos_sim_title_tag', col('metrics')[5]). \
+#     withColumn('sentiment', col('metrics')[6]). \
+#     drop('_Body', 'Year')
+
+# questions = questions.withColumn('metrics',
+#                                  calculate_metrics_udf((col('_Body')), col('_Title'), col('_Tags'))). \
+#     drop('_Body', 'Year').\
+#     withColumn('Flesch_Kincard_Grade', col('metrics')[0]). \
+#     withColumn('Flesch_reading_ease', col('metrics')[1]). \
+#     withColumn('Coleman_Liau_index', col('metrics')[2]). \
+#     withColumn('code_percentage', col('metrics')[3]). \
+#     withColumn('cos_sim_post_title', col('metrics')[4]). \
+#     withColumn('cos_sim_title_tag', col('metrics')[5]). \
+#     withColumn('sentiment', col('metrics')[6]).\
+#     repartition(20, col('_AcceptedAnswerId'))
+
+questions = questions.repartition(20, col('_AcceptedAnswerId'))
+
 questions = questions.join(answers, questions._AcceptedAnswerId == answers.AnswerId, 'leftouter'). \
-    withColumn("AcceptedAnswerCreationDate", to_timestamp("AcceptedAnswerCreationDate")). \
-    withColumn('metrics',
-               calculate_metrics_udf((col('_Body')), col('_Title'), col('_Tags'))). \
     withColumn('AnswerDurationSeconds',
                unix_timestamp(col('AcceptedAnswerCreationDate')) - unix_timestamp(col('_CreationDate'))). \
     withColumn('AnswerDurationDays', datediff(col('AcceptedAnswerCreationDate'), col('_CreationDate'))). \
     withColumn('AnswerDurationMinute', col('AnswerDurationSeconds') / 60). \
-    withColumn('AnswerDurationHour', col('AnswerDurationMinute') / 60). \
-    withColumn('Flesch_Kincard_Grade', col('metrics')[0]). \
-    withColumn('Flesch_reading_ease', col('metrics')[1]). \
-    withColumn('Coleman_Liau_index', col('metrics')[2]). \
-    withColumn('code_percentage', col('metrics')[3]). \
-    withColumn('cos_sim_post_title', col('metrics')[4]). \
-    withColumn('cos_sim_title_tag', col('metrics')[5]). \
-    withColumn('sentiment', col('metrics')[6]). \
-    drop('_Body', 'Year')
+    withColumn('AnswerDurationHour', col('AnswerDurationMinute') / 60)
+    # questions.write.mode('overwrite') \
+    # .parquet('postwithmetrics-smaller-08022023-20.parquet')
 
-# questions.repartition(20).write.mode('overwrite'). \
-#     parquet('questions-with-ans-and-metrics-cluster-Final-BigDataALERT.parquet')
+questions.write.mode('overwrite') \
+    .parquet('test-join-bigdata.parquet')
 
 # pyspark --conf "spark.pyspark.python=/usr/bin/python3.6"
