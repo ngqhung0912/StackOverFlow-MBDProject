@@ -1,6 +1,28 @@
 # StackOverFlow-MBDProject
 
-### Main instructions: 
+## About the project
+This repository implement analysis on Stack Overflow dataset to answer 2 research questions: <br>
+
+* RQ 1. What are the popular tech topics discussed in Stack Overflow, and how has it changed over time?
+* RQ 2. What are the factors contributing to the quality of questions and answers in Stack Overflow?
+  * 2.1 How do tags influence the possibility of questions getting answered?
+  * 2.2 Does user reputation influence the quality of Stack Overflow’s posts?
+  * 2.3 Which factors drive a question to be answered (and how fast)?
+
+The final report is available [here](<<TO UPDATE LINK>>)
+
+## Tools and dependencies
+
+Raw data can be downloaded from [Stack Exchange Data Dump](https://archive.org/details/stackexchange)
+
+Tools:
+
+- Apache Spark (Pyspark, Spark-xml version 2.11-0.9.0)
+- Python 
+- Jupyter Notebook (For analysis and visualization, key libraries sklearn, ntlk, matplotlib)
+
+
+## Main instructions: 
 - Python files are located in codes/ directory, and different files answer different research questions. Since submitting 
 code dependencies on Spark is not straighforward, we decided to copy-paste some of the functions between all the files - 
 therefore there might be duplicates. 
