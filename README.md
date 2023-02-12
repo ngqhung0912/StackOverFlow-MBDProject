@@ -33,3 +33,14 @@ designed to run either locally or on UT's jupyter server.
 - Some figures (not all) are available on the /fig directory. Other figures will be available on their research question's
 Jupyter notebook.
 
+### Specific instructions for pca_extended.py and features_engineering.py: 
+
+- `cd codes/` 
+
+- Create an environment using `conda env create -f stackoverflow_env.yml --name stackoverflow_env`   
+
+- Zip the environment: `zip -r stackoverflow_env.zip stackoverflow_env`
+
+- Then follow the instructions on each python file's heading. 
+
+
