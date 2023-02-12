@@ -1,11 +1,17 @@
 """
-LOCAL RUNNING:
-time spark-submit   --conf "spark.pyspark.python=./../../miniconda3/envs/bigdataEnv/bin/python"
---conf "spark.pyspark.driver.python=../../miniconda3/envs/bigdataEnv/bin/python" metrics_calculator.py
+LOCAL RUNNING (NOT RECOMMENDED):
+time spark-submit   --conf "spark.pyspark.python=./../../miniconda3/envs/bigdataEnv/bin/python" \\
+--conf "spark.pyspark.driver.python=../../miniconda3/envs/bigdataEnv/bin/python" features_engineering.py
 
 CLUSTER RUNNING:
 
-PYSPARK_PYTHON=./stackoverflow_env/stackoverflow_env/bin/python spark-submit --conf spark.dynamicAllocation.maxExecutors=30 --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./stackoverflow_env/stackoverflow_env/bin/python --master yarn --deploy-mode cluster --archives stackoverflow_env.zip#stackoverflow_env  metrics_calculator.py
+PYSPARK_PYTHON=./stackoverflow_env/stackoverflow_env/bin/python spark-submit --conf \\
+spark.dynamicAllocation.maxExecutors=20 --conf \\
+spark.yarn.appMasterEnv.PYSPARK_PYTHON=./stackoverflow_env/stackoverflow_env/bin/python --master yarn --deploy-mode \\
+cluster --archives stackoverflow_env.zip#stackoverflow_env  features_engineering.py
+With stackoverflow_env.zip is the zip folder contains the conda environment with needed libraries,
+including scikit-learn, nltk, and their dependencies.
+
 """
 # from __future__ import division # THIS LINE IS FUCKING IMPORTANT FOR PYTHON 2 ONLY!!!!!
 from pyspark import SparkContext
