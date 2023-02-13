@@ -6,7 +6,7 @@ This folder contain Python scripts and Jupyter notebooks corresponding to each r
 - Research questions 1 and research question 2.1: Analysis using tags:
   - Data preparetion: [rq1_2.1_tags_dataprep sub-folder](https://github.com/ngqhung0912/StackOverFlow-MBDProject/tree/main/codes/rq1_2.1_tags_dataprep)
   - Clusterings: Using [K-means algorithm](https://github.com/ngqhung0912/StackOverFlow-MBDProject/blob/main/codes/rq1_tags_cluster_kmeans.ipynb), 
-  and using [Affinity Propagation](rq1_tags_clustering_affinity propagation.ipynb)
+  and using [Affinity Propagation](https://github.com/ngqhung0912/StackOverFlow-MBDProject/blob/main/codes/rq1_tags_clustering_affinity%20propagation.ipynb)
   - Visualization: Jupyter Notebook [mbd_rq1_rq2.1_visualization.ipynb](https://github.com/ngqhung0912/StackOverFlow-MBDProject/blob/main/codes/mbd_rq1_rq2.1_visualization.ipynb)
   - High resolution figures are available [here](https://github.com/ngqhung0912/StackOverFlow-MBDProject/tree/main/fig/rq1_2.1_high%20resolution%20figures)
   
