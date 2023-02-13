@@ -14,6 +14,7 @@ The final report is available [here](<<TO UPDATE LINK>>)
 ## Tools and dependencies
 
 Raw data can be downloaded from [Stack Exchange Data Dump](https://archive.org/details/stackexchange)
+Raw xml data can be converted to parquet format using [this script](https://github.com/ngqhung0912/StackOverFlow-MBDProject/tree/main/codes/create_parquet)
 
 Tools:
 
