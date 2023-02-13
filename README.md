@@ -9,7 +9,7 @@ This repository implement analysis on Stack Overflow dataset to answer 2 researc
   * 2.2 Does user reputation influence the quality of Stack Overflow’s posts?
   * 2.3 Which factors drive a question to be answered (and how fast)?
 
-The final report is available [here](<<TO UPDATE LINK>>)
+The final report is available [here](https://github.com/ngqhung0912/StackOverFlow-MBDProject/blob/main/MBD_G3_Stack_Overflow.pdf)
 
 ## Tools and dependencies
 
